@@ -1,0 +1,116 @@
+---
+title: "Text Mining-Resume Shortlist"
+author: "Sabyasachi Mitra"
+date: "February 17, 2017"
+output: html_document
+---
+#Reuired package loaded
+```{r required package, echo=TRUE}
+library(rJava)
+library(NLP)
+library(tm)
+library(openNLP)
+library(RWeka)
+library(SnowballC)
+library(quanteda)
+library(reshape2)
+```
+
+## Destination folder for corpus and working directory
+```{r corpus, echo=TRUE}
+setwd("e://my learning/resume parsing")
+options(stringsAsFactors = FALSE)
+corpus <-Corpus(DirSource("cv1"))
+corpus
+writeLines(as.character(corpus[[22]]))
+getTransformations()
+```
+
+##Cleaning of data
+```{r cleaning, echo=TRUE}
+toSpace <- content_transformer(function(x, pattern) {return (gsub(pattern, " ", x))})
+corpus <- tm_map(corpus, toSpace, ":")
+corpus <- tm_map(corpus, removePunctuation)
+corpus <- tm_map(corpus, toSpace, "'")
+corpus <- tm_map(corpus, toSpace, "_")
+corpus <- tm_map(corpus,content_transformer(tolower))
+corpus <- tm_map(corpus, removeNumbers)
+corpus <- tm_map(corpus, removeWords, stopwords("english"))
+corpus <- tm_map(corpus, stripWhitespace)
+writeLines(as.character(corpus[[1]]))
+```
+
+##Stemming of the cleared data set of resumes
+```{r stem, echo=TRUE}
+corpus <- tm_map(corpus,stemDocument)
+writeLines(as.character(corpus[[22]]))
+```
+
+##Resume shortlisting based on desired skill, selection base on important skills
+```{r shortlist, echo=TRUE}
+skills <- c("java", "iit")
+```
+
+##Document term matrix build up
+```{r dtm, echo=TRUE}
+dt1 <- DocumentTermMatrix(corpus)
+dim(dt1)
+v <- as.vector(dt1[ ,skills]>=1)
+dt2 <- dt1[v, ]
+inspect(dt2[ ,skills])
+dim(dt2)
+```
+
+##Removal of the dense sparse words as words might be repeatable, the requirement is only the skills which is presented on a particular portion of the resume
+```{r sparse, echo=TRUE}
+dt3 <- removeSparseTerms(dt2, sparse=0.2:1.0)
+dim(dt2)
+dim(dt3)
+class(dt3)
+```
+
+##Finding of associate terms related to skills to check the accuracy of the code
+```{r asscociate, echo=TRUE}
+findAssocs(dt3, "java", 0.6)
+dt3
+```
+
+##Reshaping and counting after taking subset of the desired resumes
+```{r reshaping and counting, echo=TRUE}
+dt4 <- as.matrix(dt3)
+dt4 <- melt(dt4, value.name = "count")
+dim(dt4)
+a <- subset(dt4, dt4[,2] == skills)
+head(a)
+dim(a)
+head(dt4)
+```
+
+##Saving the selected resume to a new file
+```{r save, echo=TRUE}
+write.csv(a, file="dtm.csv")
+```
+
+##Checking of frequency of the terms related to skills 
+```{r frequency, echo=TRUE}
+freq <- colSums(as.matrix(dt3))
+length(freq)
+ord <- order(freq,decreasing=TRUE)
+freq[head(ord)]
+freq[tail(ord)]
+```
+
+## Making a cluster of the names
+
+```{r cluster, echo=TRUE}
+m2 <- as.matrix(a)
+dim(m2)
+distMatrix <- dist(scale(dt3))
+fit <- hclust(distMatrix, method="ward.D2")
+par(cex=0.6, mar=c(5, 8, 4, 1))
+plot(fit, xlab="", ylab="", main="", sub="", axes=FALSE)
+par(cex=1)
+title(xlab="Ward.D2", ylab="CV", main="Resume with skills")
+axis(2)
+(groups <- cutree(fit, k=4))
+```
